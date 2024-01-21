@@ -11,6 +11,7 @@ var clc = require("cli-color");
 const cleanUpAndValidate = require("./utils/authUtils");
 const userModel = require("./models/userModel");
 const isAuth = require("./middleware/isAuth");
+const todoModule = require("./models/todoModule");
 
 // contests
 const app = express();
@@ -32,6 +33,8 @@ app.use(
     store: store,
   })
 );
+
+app.use(express.static("public"));
 
 // set ejs
 app.set("view engine", "ejs");
@@ -195,10 +198,193 @@ app.post("/logout", isAuth, (req, res) => {
   });
 });
 
+// logout from all device
+
+app.post("/logout_from_all_devices", isAuth, async (req, res) => {
+  const username = req.session.user.username;
+  // schema
+  const sessionSchema = new mongoose.Schema({ _id: String }, { strict: false });
+
+  const sessionModel = mongoose.model("session", sessionSchema);
+
+  // delete schema from all device queriy
+
+  try {
+    const deleteDb = await sessionModel.deleteMany({
+      "session.user.username": username,
+    });
+    return res.send({
+      status: 200,
+      message: "Logout from all device sucessfully !!!!!!",
+      data: deleteDb,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "Database error",
+      error: error,
+    });
+  }
+});
+
+//todo apis
+
+// create api  ---->
+
+app.post("/create-todo", isAuth, async (req, res) => {
+  const todoText = req.body.todo;
+  const username = req.session.user.username;
+
+  if (!todoText) {
+    return res.send({
+      status: 400,
+      message: "Todo is empty",
+    });
+  } else if (typeof todoText !== "string") {
+    return res.send({
+      status: 400,
+      message: "Todo format is not correct",
+    });
+  } else if (todoText.length < 3 || todoText.length >= 100) {
+    return res.send({
+      status: 400,
+      message: "Todo size shloud be 3-100",
+    });
+  }
+  const todoObj = new todoModule({
+    todo: todoText,
+    username: username,
+  });
+  console.log("todoText=", todoText, "username=", username);
+  try {
+    const todoDB = await todoObj.save();
+    return res.send({
+      status: 201,
+      message: "Todo add sucessfully",
+      data: todoDB,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "database error",
+      error: error,
+    });
+  }
+});
+
+// Edit todo api----------------->
+app.post("/edit-todo", isAuth, async (req, res) => {
+  const { id, newTodo } = req.body;
+  const username = req.session.user.username;
+  console.log("username", username);
+
+  try {
+    const userID = await todoModule.findOne({ _id: id });
+
+    // check user is same or different
+    if (username !== userID.username) {
+      return res.send({
+        status: 401,
+        message: "You can't able  edit this todo ",
+      });
+    }
+
+    const prevTodo = await todoModule.findOneAndUpdate(
+      { _id: id },
+      { todo: newTodo }
+    );
+    console.log(prevTodo);
+    return res.send({
+      status: 200,
+      message: "Todo update sucessfully",
+      data: prevTodo,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "Data base error",
+      error: error,
+    });
+  }
+});
+
+// delete todo api
+
+app.post("/delete-todo", isAuth, async (req, res) => {
+  const id = req.body.id;
+  const username = req.session.user.username;
+  console.log(id, username);
+  if (!id) {
+    return res.send({
+      status: 403,
+      message: "missing criditional",
+    });
+  }
+  try {
+    const userId = await todoModule.findOne({ _id: id });
+    console.log(userId);
+
+    if (!userId) {
+      return res.send({
+        status: 400,
+        message: "Todo is not available",
+      });
+    }
+
+    if (username !== userId.username) {
+      return res.send({
+        status: 403,
+        message: "You can't delete todo",
+      });
+    }
+
+    const prevTodo = await todoModule.findOneAndDelete({ _id: id });
+    res.send({
+      status: 500,
+      message: "Deltetion of todo is sucessfull",
+      data: prevTodo,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "database error",
+      error: error,
+    });
+  }
+});
+
+// todo read api
+app.post("/read-todo", isAuth, async (req, res) => {
+  const username = req.session.user.username;
+  console.log(username);
+  try {
+    const userDB = await todoModule.find({ username });
+    return res.send({
+      status: 200,
+      message: "Read complete",
+      data: userDB,
+    });
+  } catch (error) {
+    return res.send({
+      status: 500,
+      message: "Database error",
+      error: error,
+    });
+  }
+  res.send("all okk");
+});
 // deshboard api
 
-app.get("/dashboard", isAuth, (req, res) => {
-  return res.render("dashboard");
+app.get("/dashboard", isAuth, async (req, res) => {
+  const username = req.session.user.username;
+
+  try {
+    const todos = await todoModule.find({ username });
+    console.log(todos);
+    return res.render("dashboard", { todos: todos });
+  } catch (error) {
+    return res.send(error);
+  }
 });
 
 app.listen(PORT, () => {
