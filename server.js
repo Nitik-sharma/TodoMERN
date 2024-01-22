@@ -277,11 +277,23 @@ app.post("/edit-todo", isAuth, async (req, res) => {
   const { id, newTodo } = req.body;
   const username = req.session.user.username;
   console.log("username", username);
-
+  if (!newTodo) {
+    return res.send({
+      status: 400,
+      message: "Missing creditional",
+    });
+  }
   try {
     const userID = await todoModule.findOne({ _id: id });
 
     // check user is same or different
+    if (!userID) {
+      return res.send({
+        status: 400,
+        message: "Todo is not available",
+      });
+    }
+
     if (username !== userID.username) {
       return res.send({
         status: 401,
@@ -354,7 +366,7 @@ app.post("/delete-todo", isAuth, async (req, res) => {
 });
 
 // todo read api
-app.post("/read-todo", isAuth, async (req, res) => {
+app.get("/read-todo", isAuth, async (req, res) => {
   const username = req.session.user.username;
   console.log(username);
   try {
@@ -365,7 +377,7 @@ app.post("/read-todo", isAuth, async (req, res) => {
       data: userDB,
     });
   } catch (error) {
-    return res.send({
+    res.send({
       status: 500,
       message: "Database error",
       error: error,
@@ -376,15 +388,7 @@ app.post("/read-todo", isAuth, async (req, res) => {
 // deshboard api
 
 app.get("/dashboard", isAuth, async (req, res) => {
-  const username = req.session.user.username;
-
-  try {
-    const todos = await todoModule.find({ username });
-    console.log(todos);
-    return res.render("dashboard", { todos: todos });
-  } catch (error) {
-    return res.send(error);
-  }
+  return res.render("dashboard");
 });
 
 app.listen(PORT, () => {
